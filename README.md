@@ -1,4 +1,3 @@
-[README.md](https://github.com/user-attachments/files/30100354/README.md)[Uploading R# Scalable Data Ingestion and Query Optimization Pipeline
 
 **Author:** Sravani Elavarthi
 
@@ -230,4 +229,3 @@ Once the application is running, visit `http://localhost:8000/docs` for the Swag
 ## License
 
 MIT
-EADME.md…]()
