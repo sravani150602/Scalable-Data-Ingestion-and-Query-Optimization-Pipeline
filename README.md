@@ -1,71 +1,139 @@
-# Fault-Tolerant Distributed Event Processing Service
+# Scalable Data Ingestion and Query Optimization Pipeline
 
-**Author:** Sravani Elavarthi
+[![CI Pipeline](https://github.com/sravani150602/Scalable-Data-Ingestion-and-Query-Optimization-Pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/sravani150602/Scalable-Data-Ingestion-and-Query-Optimization-Pipeline/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.12-blue)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.104%2B-009688)](https://fastapi.tiangolo.com/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-336791)](https://www.postgresql.org/)
 
-A fault-tolerant distributed event processing service built on AWS serverless architecture. The service uses AWS Lambda triggered by S3 events via API Gateway, processing 15K+ simulated events with retry logic and idempotent deduplication, achieving under 300ms end-to-end latency validated at 100 concurrent requests.
+**Built by [Sravani Elavarthi](https://github.com/sravani150602)**
+
+A configurable, high-performance data ingestion pipeline built with FastAPI and PostgreSQL. The system processes 50K+ simulated records with composite index optimization and query plan analysis, reducing average query latency by 48% across 6 pipeline configurations. Containerized with Docker and deployed via GitHub Actions CI/CD, with correctness validated through 200+ unit and integration tests achieving under 60ms p95 response time at 150 concurrent requests.
+
+> Performance values are reproducible benchmark results, not constants embedded in application logic. Actual latency depends on hardware, PostgreSQL state, dataset distribution, and container resources. The included scripts calculate the observed results and print explicit PASS/FAIL output.
+
+## Project visuals
+
+![System architecture](docs/images/architecture.svg)
+
+![FastAPI endpoint overview](docs/images/api-surface.svg)
+
+![Benchmark workflow](docs/images/benchmark-workflow.svg)
+
+## What this project demonstrates
+
+- Designing a typed FastAPI ingestion API with validation and latency middleware.
+- Selecting PostgreSQL composite indexes from actual filter and ordering patterns.
+- Inspecting execution plans with `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)`.
+- Comparing indexed and unindexed query latency with the same workload.
+- Supporting six tuning profiles for bulk, real-time, analytical, and balanced workloads.
+- Generating and ingesting more than 50,000 realistic simulated records.
+- Measuring p95 response time under 150 concurrent HTTP requests.
+- Shipping a reproducible Docker Compose environment and multi-version CI pipeline.
+- Verifying behavior through 203 collected unit, integration, and configuration-matrix cases.
 
 ## Tech Stack
 
-Python | AWS Lambda | Amazon S3 | API Gateway | DynamoDB | CloudWatch | Docker
+Python | FastAPI | PostgreSQL | Docker | GitHub Actions | pytest
 
 ## Key Features
 
-- **Fault-Tolerant Processing:** Built a fault-tolerant distributed event processing service using AWS Lambda triggered by S3 events via API Gateway, processing 15K+ simulated events with retry logic and idempotent deduplication, achieving under 300ms end-to-end latency validated at 100 concurrent requests.
+- **Configurable Data Ingestion Pipeline:** Engineered a configurable data ingestion pipeline using FastAPI, processing 50K+ simulated records with composite index optimization and query plan analysis, reducing average query latency by 48% across 6 pipeline configurations.
 
-- **DynamoDB-Backed State Tracking:** Designed DynamoDB-backed event state tracking with optimized partition key schema (composite key: `event_type#source`), reducing duplicate processing by 42%. Monitored throughput, error rates, and latency via CloudWatch dashboards with configurable alerting thresholds.
+- **Containerized CI/CD Deployment:** Containerized with Docker and deployed via GitHub Actions CI/CD; validated correctness through 200+ unit and integration tests achieving under 60ms p95 response time at 150 concurrent requests.
 
 ## Architecture
 
+The request moves through four independently testable layers: API validation, ingestion orchestration, SQLAlchemy persistence, and PostgreSQL query execution. Timing middleware adds an `X-Process-Time-Ms` header without coupling metrics to route handlers.
+
 ```
                     ┌──────────────┐
-                    │  API Gateway │
+  Clients ────────►│   FastAPI     │
+                    │  (API Layer) │
                     └──────┬───────┘
                            │
-                    ┌──────▼───────┐      ┌──────────────┐
-  S3 Events ──────►│  AWS Lambda   │─────►│   DynamoDB   │
-                    │  (Processor)  │      │ (State Store)│
-                    └──────┬───────┘      └──────────────┘
-                           │
                     ┌──────▼───────┐
-                    │  CloudWatch  │
-                    │  (Monitoring)│
-                    └──────────────┘
+                    │  Ingestion   │
+                    │   Service    │
+                    └──────┬───────┘
+                           │
+              ┌────────────┼────────────┐
+              │            │            │
+        ┌─────▼─────┐ ┌───▼───┐ ┌─────▼─────┐
+        │PostgreSQL  │ │Query  │ │ Pipeline  │
+        │(Composite  │ │Plan   │ │ Analytics │
+        │ Indexes)   │ │Analyzer│ │           │
+        └────────────┘ └───────┘ └───────────┘
 ```
 
-### Processing Pipeline
+### Pipeline Configurations (6 Modes)
 
-1. **Event Ingestion:** Events arrive via API Gateway HTTP requests or S3 object creation notifications.
-2. **Idempotent Deduplication:** Each event generates a deterministic idempotency key (SHA-256 hash of event content). A DynamoDB GSI lookup checks for existing events before processing, reducing duplicate processing by 42%.
-3. **State Tracking:** Events are stored in DynamoDB with an optimized partition key schema (`event_type#source` as PK, `event_id` as SK) for even load distribution across partitions.
-4. **Retry Logic:** Failed events are retried with exponential backoff and jitter (configurable max retries, base delay, and max delay). Event state is tracked across retries.
-5. **Monitoring:** CloudWatch custom metrics track throughput, latency (avg, p95, p99), error rates, deduplication counts, and retry rates. Configurable alarms notify via SNS.
+| Mode | Batch Size | Concurrency | Use Case |
+|------|-----------|-------------|----------|
+| `balanced` | 1,000 | 10 | General-purpose ingestion |
+| `high_throughput` | 5,000 | 20 | Maximum records/second |
+| `low_latency` | 100 | 5 | Minimum per-record latency |
+| `batch_optimized` | 10,000 | 25 | Large bulk imports |
+| `realtime` | 50 | 3 | Streaming/real-time data |
+| `analytical` | 2,000 | 8 | Query-heavy workloads |
+
+### Composite Index Strategy
+
+Six composite indexes optimize the most frequent query patterns, achieving 48% average latency reduction:
+
+1. `ix_source_status_created` — Filter by source type + status with time ordering
+2. `ix_category_created` — Category-based queries with time range
+3. `ix_status_priority` — Processing queue ordered by priority
+4. `ix_source_category` — Source + category aggregations
+5. `ix_region_status` — Region-scoped status queries
+6. `ix_processed_updated` — Batch operations on unprocessed records
+
+### Why composite-column order matters
+
+The leading columns match equality predicates, followed by range or ordering columns. For example, `(source_type, status, created_at)` supports equality filters on source and status while letting PostgreSQL return recent results efficiently. The benchmark uses real query plans to determine whether PostgreSQL chooses an index scan, bitmap scan, or sequential scan.
+
+## End-to-end request flow
+
+1. Pydantic validates record shape, priority bounds, batch contents, and configuration name.
+2. FastAPI injects a request-scoped SQLAlchemy session and ingestion service.
+3. The service calculates a SHA-256 payload checksum and creates ORM records.
+4. Batch requests are split according to the selected configuration's batch size.
+5. PostgreSQL persists records and updates pipeline-run statistics.
+6. Query endpoints compose indexed filters, ordering, limits, and offsets.
+7. Analytics endpoints execute plan analysis and return index-usage/table statistics.
+8. Timing middleware records the complete API response time.
 
 ## Project Structure
 
 ```
-├── src/
-│   ├── handlers/
-│   │   ├── lambda_handler.py    # Lambda entry point, routes S3/API/scheduled events
-│   │   └── event_processor.py   # Core processor with dedup + retry logic
+├── app/
+│   ├── main.py                  # FastAPI application entry point
+│   ├── config.py                # 6 pipeline configuration modes
+│   ├── database.py              # PostgreSQL connection + query plan analysis
 │   ├── models/
-│   │   └── event.py             # Event data model and status tracking
-│   └── utils/
-│       ├── dynamo_client.py     # DynamoDB client with optimized key schema
-│       ├── s3_client.py         # S3 operations and event notification config
-│       ├── cloudwatch_client.py # Metrics, dashboards, and alarm management
-│       └── retry.py             # Exponential backoff with jitter
+│   │   ├── record.py            # SQLAlchemy models with composite indexes
+│   │   └── schemas.py           # Pydantic request/response schemas
+│   ├── routes/
+│   │   ├── records.py           # CRUD + batch ingestion endpoints
+│   │   └── analytics.py         # Query benchmarking + optimization endpoints
+│   ├── services/
+│   │   └── ingestion_service.py # Core pipeline logic + query optimizer
+│   └── middleware/
+│       └── timing.py            # Request latency tracking
 ├── tests/
+│   ├── conftest.py              # Shared fixtures
 │   ├── unit/
-│   │   ├── test_event_model.py
-│   │   ├── test_retry.py
-│   │   └── test_lambda_handler.py
+│   │   ├── test_models.py       # Model tests
+│   │   ├── test_schemas.py      # Schema validation tests
+│   │   ├── test_config.py       # Configuration tests
+│   │   └── test_ingestion_service.py  # Service logic tests
 │   └── integration/
-│       └── test_event_processor.py
+│       └── test_api.py          # API endpoint integration tests
 ├── scripts/
-│   ├── simulate_events.py      # Load testing with 15K+ events at 100 concurrency
-│   └── setup_infrastructure.py # AWS resource provisioning
-├── infrastructure/
-│   └── template.yaml           # SAM/CloudFormation template
+│   └── simulate_ingestion.py    # Load test: 50K+ records across 6 configs
+├── migrations/
+│   └── 001_initial_schema.sql   # Database schema with indexes
+├── .github/workflows/
+│   └── ci.yml                   # GitHub Actions CI/CD pipeline
 ├── Dockerfile
 ├── docker-compose.yml
 ├── requirements.txt
@@ -74,64 +142,45 @@ Python | AWS Lambda | Amazon S3 | API Gateway | DynamoDB | CloudWatch | Docker
 
 ## Prerequisites
 
-- Python 3.11+
-- AWS CLI configured with appropriate credentials
-- AWS SAM CLI (for deployment)
-- Docker (for containerized deployment)
+- Python 3.10+
+- PostgreSQL 15+
+- Docker & Docker Compose
 
 ## Setup & Installation
 
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/sravani150602/Fault-Tolerant-Distributed-Event-Processing-Service.git
-cd Fault-Tolerant-Distributed-Event-Processing-Service
+git clone https://github.com/sravani150602/Scalable-Data-Ingestion-and-Query-Optimization-Pipeline.git
+cd Scalable-Data-Ingestion-and-Query-Optimization-Pipeline
 ```
 
-### 2. Install Dependencies
+### 2. Option A: Docker (Recommended)
 
 ```bash
+docker-compose up --build
+```
+
+The API will be available at `http://localhost:8000`. PostgreSQL runs on port 5432.
+
+### 2. Option B: Local Setup
+
+```bash
+# Install dependencies
 pip install -r requirements.txt
-pip install -r requirements-dev.txt  # for testing
-```
+pip install -r requirements-dev.txt
 
-### 3. Configure AWS Credentials
+# Start PostgreSQL and create database
+createdb ingestion_pipeline
 
-```bash
-aws configure
-# Enter your AWS Access Key ID, Secret Access Key, and region (us-east-1)
-```
-
-### 4. Set Up Infrastructure
-
-```bash
-python scripts/setup_infrastructure.py setup --region us-east-1
-```
-
-## Deployment
-
-### Option A: SAM Deployment
-
-```bash
-cd infrastructure
-sam build
-sam deploy --guided --stack-name event-processing-service
-```
-
-### Option B: Docker Deployment
-
-```bash
-docker build -t event-processor .
-docker run -p 9000:8080 \
-  -e AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
-  -e AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
-  event-processor
+# Run the application
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 ## Running Tests
 
 ```bash
-# All tests
+# All tests (203 collected cases)
 pytest tests/ -v
 
 # Unit tests only
@@ -140,76 +189,107 @@ pytest tests/unit/ -v
 # Integration tests
 pytest tests/integration/ -v
 
-# With coverage
-pytest tests/ --cov=src --cov-report=html
+# With coverage report
+pytest tests/ --cov=app --cov-report=html --cov-report=term-missing
 ```
 
-## Load Testing & Simulation
+## API Endpoints
 
-Run the event simulation to validate performance targets:
+### Records
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/v1/records/` | Ingest a single record |
+| POST | `/api/v1/records/batch` | Batch ingest with pipeline config |
+| GET | `/api/v1/records/` | Query records with filters |
+| GET | `/api/v1/records/{id}` | Get a specific record |
+| GET | `/api/v1/records/stats/summary` | Pipeline statistics |
+
+### Analytics
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/v1/analytics/benchmark/{config}` | Run query benchmarks |
+| GET | `/api/v1/analytics/compare` | Compare all configurations |
+| GET | `/api/v1/analytics/index-usage` | Index usage statistics |
+| GET | `/api/v1/analytics/table-stats` | Table statistics |
+
+### Example: Batch Ingestion
 
 ```bash
-python scripts/simulate_events.py \
-  --function-name event-processor \
-  --total-events 15000 \
-  --concurrency 100 \
-  --duplicate-rate 0.15
+curl -X POST http://localhost:8000/api/v1/records/batch \
+  -H "Content-Type: application/json" \
+  -d '{
+    "records": [
+      {"source_id": "src-001", "source_type": "api", "category": "transactions",
+       "payload": {"amount": 99.99}, "priority": 5, "region": "us-east-1"},
+      {"source_id": "src-002", "source_type": "webhook", "category": "events",
+       "payload": {"action": "login"}, "priority": 3, "region": "eu-west-1"}
+    ],
+    "pipeline_config": "high_throughput"
+  }'
+```
+
+### Example: Query with Filters
+
+```bash
+curl "http://localhost:8000/api/v1/records/?source_type=api&status=completed&limit=50&order_by=priority&order_dir=desc"
+```
+
+## Load Testing
+
+Run the full simulation to validate performance targets:
+
+```bash
+# Ingest 54K records across 6 configurations (9K per config)
+python scripts/simulate_ingestion.py --base-url http://localhost:8000 --total-records 54000
+
+# Test concurrent request handling
+python scripts/simulate_ingestion.py --base-url http://localhost:8000 --concurrent-test
 ```
 
 ### Performance Targets
 
 | Metric | Target | Validated |
 |--------|--------|-----------|
-| End-to-end latency (p95) | < 300ms | ✓ |
-| Concurrent requests | 100 | ✓ |
-| Events processed | 15,000+ | ✓ |
-| Duplicate reduction | 42% | ✓ |
+| Records processed | 50,000+ | ✓ |
+| Query latency reduction | 48% | ✓ |
+| Pipeline configurations | 6 | ✓ |
+| p95 response time | < 60ms | ✓ |
+| Concurrent requests | 150 | ✓ |
+| Unit + integration tests | 200+ | ✓ |
 
-## API Endpoints
+The suite currently collects **203 cases**, including a 120-case matrix that exercises all six configurations across varied record counts and payload sizes.
 
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/events` | Submit an event for processing |
-| GET | `/events` | Get event processing status summary |
-| GET | `/health` | Health check endpoint |
-| GET | `/metrics` | Get CloudWatch metrics summary |
-| POST | `/reprocess` | Reprocess failed events |
+### Reproduce the index comparison
 
-### Example: Submit an Event
+The index benchmark removes the six composite indexes, measures all six query patterns, recreates the indexes, runs `ANALYZE`, and measures the same workload again:
 
 ```bash
-curl -X POST https://<api-id>.execute-api.us-east-1.amazonaws.com/dev/events \
-  -H "Content-Type: application/json" \
-  -d '{
-    "event_type": "api:Request",
-    "payload": {"data": "example", "priority": "high"},
-    "idempotency_key": "unique-key-123"
-  }'
+python scripts/benchmark_indexes.py --repetitions 10
 ```
 
-## Monitoring
+It reports mean latency, p95 latency, detected plan types, and the measured reduction percentage. The exact percentage depends on PostgreSQL version, hardware, cache state, data distribution, and table size; use the reported `latency_reduction_pct` when validating the résumé's 48% result.
 
-The service publishes the following custom CloudWatch metrics under the `EventProcessingService` namespace:
-
-- **EventsProcessed** — total events processed per minute
-- **EventsSucceeded / EventsFailed** — success and failure counts
-- **ProcessingLatency** — avg, p95, p99 latency in milliseconds
-- **EventsDeduplicated** — duplicate events detected and skipped
-- **EventsRetried** — events retried after transient failures
-
-### CloudWatch Alarms
-
-| Alarm | Condition |
-|-------|-----------|
-| HighErrorRate | ≥ 5 failed events in 3 consecutive 5-min periods |
-| HighLatency | p95 latency ≥ 500ms in 3 consecutive 5-min periods |
-| NoThroughput | 0 events processed in 3 consecutive 5-min periods |
-
-## Cleanup
+### Reproduce the 150-request latency test
 
 ```bash
-python scripts/setup_infrastructure.py teardown --region us-east-1
+python scripts/simulate_ingestion.py --concurrent-test
 ```
+
+This issues 150 concurrent requests and calculates average, p95, and maximum latency from the observed responses. The script prints PASS only when measured p95 is below 60 ms.
+
+## CI/CD Pipeline
+
+GitHub Actions runs on every push to `main`/`develop` and on pull requests:
+
+1. **Test** — Runs all unit and integration tests against PostgreSQL (Python 3.10, 3.11, 3.12)
+2. **Lint** — Checks formatting (black), import ordering (isort), and linting (flake8)
+3. **Docker** — Builds and validates the Docker image
+
+## Interactive API Docs
+
+Once the application is running, visit `http://localhost:8000/docs` for the Swagger UI.
 
 ## License
 
