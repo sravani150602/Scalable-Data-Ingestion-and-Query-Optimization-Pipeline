@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="620" viewBox="0 0 1200 620">
+  <rect width="1200" height="620" fill="#0d1117"/>
+  <text x="60" y="65" fill="#f0f6fc" font-family="Arial" font-size="32" font-weight="700">Scalable Data Ingestion Pipeline</text>
+  <text x="60" y="100" fill="#8b949e" font-family="Arial" font-size="18">Request flow and storage architecture</text>
+  <g font-family="Arial" text-anchor="middle">
+    <rect x="65" y="230" width="190" height="100" rx="16" fill="#1f6feb"/><text x="160" y="273" fill="white" font-size="22" font-weight="700">API Clients</text><text x="160" y="302" fill="#dbeafe" font-size="16">JSON / HTTP</text>
+    <rect x="345" y="190" width="220" height="180" rx="16" fill="#238636"/><text x="455" y="245" fill="white" font-size="24" font-weight="700">FastAPI</text><text x="455" y="277" fill="#dcfce7" font-size="16">Validation + routes</text><text x="455" y="306" fill="#dcfce7" font-size="16">Timing middleware</text><text x="455" y="335" fill="#dcfce7" font-size="16">Swagger / OpenAPI</text>
+    <rect x="655" y="170" width="230" height="220" rx="16" fill="#8957e5"/><text x="770" y="225" fill="white" font-size="23" font-weight="700">Ingestion Service</text><text x="770" y="262" fill="#f3e8ff" font-size="16">6 configurations</text><text x="770" y="293" fill="#f3e8ff" font-size="16">Batch processing</text><text x="770" y="324" fill="#f3e8ff" font-size="16">Checksums + metrics</text><text x="770" y="355" fill="#f3e8ff" font-size="16">Query optimizer</text>
+    <rect x="975" y="190" width="180" height="180" rx="16" fill="#b35900"/><text x="1065" y="245" fill="white" font-size="23" font-weight="700">PostgreSQL</text><text x="1065" y="282" fill="#ffedd5" font-size="16">6 composite indexes</text><text x="1065" y="313" fill="#ffedd5" font-size="16">EXPLAIN ANALYZE</text><text x="1065" y="344" fill="#ffedd5" font-size="16">Plan statistics</text>
+  </g>
+  <g stroke="#58a6ff" stroke-width="5" fill="none"><path d="M255 280H345"/><path d="M565 280H655"/><path d="M885 280H975"/></g>
+  <g fill="#58a6ff"><path d="M335 268l20 12-20 12z"/><path d="M645 268l20 12-20 12z"/><path d="M965 268l20 12-20 12z"/></g>
+  <rect x="345" y="465" width="540" height="85" rx="14" fill="#161b22" stroke="#30363d"/><text x="615" y="500" fill="#f0f6fc" font-family="Arial" font-size="20" text-anchor="middle" font-weight="700">Docker Compose development environment</text><text x="615" y="530" fill="#8b949e" font-family="Arial" font-size="16" text-anchor="middle">API container · PostgreSQL 15 · health checks · persistent volume</text>
+</svg>
